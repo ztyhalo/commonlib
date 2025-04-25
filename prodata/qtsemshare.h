@@ -85,6 +85,9 @@ int Sem_Qt_Data< T >::creat_sem_data(int size, key_t semkey, const QString & sha
 
     midaddr = this->creat_data(alinesize, sharekey);
     m_bufSize = size / sizeof(T);
+
+    zprintf2("Sem_Qt_Data create m_bufsize %d aline %d alinesize %d!\n", m_bufSize, aline, alinesize);
+
     if (midaddr != NULL)
     {
         ZLockerClass<Sem_Qt_Data< T >> locker(this);
@@ -232,11 +235,12 @@ class Sem_QtPth_Data : public Sem_Qt_Data< T >, public Call_B_T< T, FAT >
 template < class T, class FAT >
 void Sem_QtPth_Data< T, FAT >::run(void)
 {
-    zprintf3("Sem_QtPth_Data run!\n");
+    zprintf3("Sem_QtPth_Data run glic ver %d.%d!\n", __GLIBC__, __GLIBC_MINOR__);
 
     while (this->running)
     {
-        if (sem_p(this->m_semId, 10) == 0)
+#if (__GLIBC__ > 2) || (__GLIBC__ == 2 && __GLIBC_MINOR__ > 18)  // glibc ≥ 2.4 的代码逻辑
+        if (sem_p(this->m_semId) == 0)
         {
 
             while(this->running)
@@ -260,6 +264,32 @@ void Sem_QtPth_Data< T, FAT >::run(void)
         {
             pthread_testcancel();
         }
+#else
+        if (sem_p(this->m_semId, 10) == 0)
+        {
+
+            while(this->running)
+            {
+                T   val;
+                int err = this->a8_read_send_data(val);
+                if ( err >= 0)
+                {
+                    if (this->z_callbak != NULL) //执行操作
+                    {
+                        this->z_callbak(this->father, val);
+                    }
+                    if(err == 0)
+                        break;
+                }
+                else
+                    break;
+            }
+        }
+        else
+        {
+            pthread_testcancel();
+        }
+#endif
     }
     pthread_exit(NULL);
 }

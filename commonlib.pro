@@ -41,6 +41,7 @@ SOURCES += \
     tcp/tcp_client.cpp \
     timer/timers.cpp \
     udp/udp.cpp \
+    zprint/netprint.cpp \
     zprint/zprint.cpp
 
 HEADERS += \
