@@ -45,12 +45,13 @@ class QT_Share_MemT
             lhshare.detach();
         }
     }
-
+    bool destory();
     int  creat_data(int size);
     T*   creat_data(int size, const QString & keyid);
     void lock_qtshare(void);
     void unlock_qtshare(void);
     void set_data(T * addr, T  val);
+    int  read_creat_data(int size, const QString & keyid);
 
 };
 
@@ -66,6 +67,48 @@ void QT_Share_MemT< T >::unlock_qtshare(void)
 }
 
 template < class T >
+bool QT_Share_MemT< T >::destory(void)
+{
+    key_t unix_key;
+    zprintf2("QT_Share_MemT is exist key:%s nativekey: %s!\n", lhshare.key().toStdString().c_str(),
+             lhshare.nativeKey().toStdString().c_str());
+    unix_key = ftok(lhshare.nativeKey().toStdString().c_str(), 'Q');
+    if(unix_key == -1)
+        return true;
+
+    int id = shmget(unix_key, 0, 0400);
+
+    zprintf1("get unix_key %d id %d!\n", unix_key, id);
+
+    struct shmid_ds shmid_ds;
+    if (0 != shmctl(id, IPC_STAT, &shmid_ds)) {
+        switch (errno) {
+        case EINVAL:
+            return true;
+        default:
+            return false;
+        }
+    }
+    if (shmid_ds.shm_nattch == 0) {
+        // mark for removal
+        if (-1 == shmctl(id, IPC_RMID, &shmid_ds)) {
+            zprintf1("remove error %d!\n", errno);
+            switch (errno) {
+            case EINVAL:
+                return true;
+            default:
+                return false;
+            }
+        }
+
+        // remove file
+        if (!remove(lhshare.nativeKey().toStdString().c_str()))
+            return false;
+    }
+    return true;
+}
+
+template < class T >
 int QT_Share_MemT< T >::creat_data(int size)
 {
 
@@ -75,6 +118,8 @@ int QT_Share_MemT< T >::creat_data(int size)
         zprintf2("qt share have attach!\n");
         lhshare.detach();
     }
+
+    destory();
 
     if (!lhshare.create(size))
     {
@@ -100,6 +145,31 @@ int QT_Share_MemT< T >::creat_data(int size)
     }
 
     this->m_data = (T*) lhshare.data();
+
+    return 0;
+}
+
+template < class T >
+int QT_Share_MemT< T >::read_creat_data(int size, const QString & keyid)
+{
+    m_shmKey = keyid;
+
+    lhshare.setKey(m_shmKey);
+
+    if (!lhshare.attach())
+    {
+        zprintf1("can't attatch qt share\n");
+        return -1;
+    }
+    this->m_data = (T*) lhshare.data();
+    this->m_size = lhshare.size();
+
+    if(size != this->m_size)
+    {
+        zprintf1("QTShareDataT read create size %d create size %d!\n", size, this->m_size);
+    }
+
+
 
     return 0;
 }
@@ -149,6 +219,7 @@ class QTShareDataT : public creatdata< T >
         zprintf3("destory QTShareDataT!\n");
     }
 
+    bool  destory(void);
     int  creat_data(int size) override;
     T*   creat_data(int size, const QString & keyid);
     int  read_creat_data(int size, const QString & keyid = "lhshare");
@@ -190,6 +261,48 @@ bool QTShareDataT< T >::unlock(void)
 }
 
 template < class T >
+bool QTShareDataT< T >::destory(void)
+{
+    key_t unix_key;
+    zprintf2("QTShareDataT is exist key:%s nativekey: %s!\n", lhshare.key().toStdString().c_str(),
+             lhshare.nativeKey().toStdString().c_str());
+    unix_key = ftok(lhshare.nativeKey().toStdString().c_str(), 'Q');
+    if(unix_key == -1)
+        return true;
+
+    int id = shmget(unix_key, 0, 0400);
+
+    zprintf1("get unix_key %d id %d!\n", unix_key, id);
+
+    struct shmid_ds shmid_ds;
+    if (0 != shmctl(id, IPC_STAT, &shmid_ds)) {
+        switch (errno) {
+        case EINVAL:
+            return true;
+        default:
+            return false;
+        }
+    }
+    if (shmid_ds.shm_nattch == 0) {
+        // mark for removal
+        if (-1 == shmctl(id, IPC_RMID, &shmid_ds)) {
+            zprintf1("remove error %d!\n", errno);
+            switch (errno) {
+            case EINVAL:
+                return true;
+            default:
+                return false;
+            }
+        }
+
+        // remove file
+        if (!remove(lhshare.nativeKey().toStdString().c_str()))
+            return false;
+    }
+    return true;
+}
+
+template < class T >
 int QTShareDataT< T >::creat_data(int size)
 {
 
@@ -199,13 +312,15 @@ int QTShareDataT< T >::creat_data(int size)
         zprintf2("qt share have attach!\n");
         lhshare.detach();
     }
-
+    destory();
     if (!lhshare.create(size))
     {
         zprintf2("qt share creat fail!\n");
 
         if (lhshare.error() == QSharedMemory::AlreadyExists) //已经存在
         {
+            zprintf2("QTShareDataT is exist key:%s nativekey: %s!\n", lhshare.key().toStdString().c_str(),
+                     lhshare.nativeKey().toStdString().c_str());
             if (!lhshare.attach())
             {
                 zprintf2("can't attatch qt share!\n");

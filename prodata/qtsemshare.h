@@ -294,4 +294,35 @@ void Sem_QtPth_Data< T, FAT >::run(void)
     pthread_exit(NULL);
 }
 
+
+#include <pthread.h>
+#include <semaphore.h>
+
+sem_t sem;
+volatile int exit_flag = 0;
+
+void cleanup(void *arg) {
+    sem_post(&sem);  // 确保信号量释放
+}
+
+void* thread_func(void* arg) {
+    pthread_cleanup_push(cleanup, NULL);
+    struct sembuf sem_buf = {.sem_num=0, .sem_op=-1, .sem_flg=SEM_UNDO};
+    while (!exit_flag) {
+        if (semop(sem_id, &sem_buf, 1) == -1) {
+            perror("semop");
+            break;
+        }
+        // 业务逻辑
+    }
+    pthread_cleanup_pop(1);  // 执行清理函数
+    return NULL;
+}
+
+void destructor() {
+    exit_flag = 1;          // 通知线程主动退出
+    sem_post(&sem);         // 唤醒阻塞的 semop()
+    pthread_join(thread_id, NULL);  // 等待线程结束
+}
+
 #endif /*__SEMSHARE_H__*/
